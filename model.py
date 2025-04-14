@@ -56,7 +56,7 @@ class PixelCNNLayer_down(nn.Module):
 
 class PixelCNN(nn.Module):
     def __init__(self, nr_resnet=5, nr_filters=80, nr_logistic_mix=10,
-                    resnet_nonlinearity='concat_elu', input_channels=3, embedding_dim=80,num_classes=4, film=True):
+                    resnet_nonlinearity='concat_elu', input_channels=3, embedding_dim=80,num_classes=4, film=True, mid_fusion=True):
         super(PixelCNN, self).__init__()
         if resnet_nonlinearity == 'concat_elu' :
             self.resnet_nonlinearity = lambda x : concat_elu(x)
@@ -103,6 +103,10 @@ class PixelCNN(nn.Module):
         num_mix = 3 if self.input_channels == 1 else 10
         self.nin_out = nin(nr_filters, num_mix * nr_logistic_mix)
         self.init_padding = None
+        self.mid_fusion = mid_fusion
+        if self.mid_fusion:
+            self.fuse_u  = nn.Conv2d(nr_filters, nr_filters, 1, bias=False)
+            self.fuse_ul = nn.Conv2d(nr_filters, nr_filters, 1, bias=False)
 
 
     def forward(self, x,class_labels, sample=False):
@@ -144,6 +148,11 @@ class PixelCNN(nn.Module):
         ###    DOWN PASS    ###
         u  = u_list.pop()
         ul = ul_list.pop()
+
+        if self.mid_fusion:
+            fuse_map = class_embed_map                      # (B,C,1,1)
+            u  = u  + self.fuse_u (fuse_map)                # broadcast to spatial
+            ul = ul + self.fuse_ul(fuse_map)
 
         for i in range(3):
             # resnet block
